@@ -18,8 +18,8 @@ Get yourself a license from [Actuated](https://docs.actuated.dev/). They provide
 
 Get at least two servers on Hetzner (or somewhere else, but we use Hetzner) with at least NVME 2 disks:
 
-- AX 161 AMD server
-- RX 170 ARM server
+- [AX 161](https://www.hetzner.com/dedicated-rootserver/ax161) AMD server
+- [RX 170](https://www.hetzner.com/dedicated-rootserver/rx170) ARM server
 
 SSH into them and take note of the Hardware data section
 
