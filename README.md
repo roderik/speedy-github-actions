@@ -31,19 +31,21 @@ SSH into them and take note of the Hardware data section
    Total capacity 7153 GiB with 2 Disks
 ```
 
-We have 2 disks, we will use `/dev/nvme0n1` as our OS disk and `/dev/nvme1n1` as the actuated disk for the runners
-
 Next, run `installimage` and pick Ubuntu 22.04.
 
 In the config file:
 
-- Comment out the nvme1n1 drive (make sure the left over DRIVE1 is still nr 1
-- Set SWRAID to 0
+- Set SWRAID to 1 and pick RAID 1
 - Set the hostname to actuated-<arch>-<0 prefixed nr>
 - Setup the partitions like this:
-  - PART swap  swap 100G
-  - PART /boot ext3  1G
-  - PART /     ext4  all
+
+```
+PART /boot ext3     1024M
+PART lvm   actuated all
+
+LV actuated swap swap swap 64G
+LV actuated root /    ext4 1024G
+```
 
 Save, quit, reboot and wait for the server to come back up.
 

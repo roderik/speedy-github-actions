@@ -55,44 +55,61 @@
       ignore_errors: yes
       changed_when: false
 
-    - name: setup LVM partition
-      block:
-        - name: create physical volume
-          command: pvcreate -ff {{ actuated_disk }}
+    - name: Check if LV exists
+      ansible.builtin.command: lvs --noheadings -o lv_name actuated
+      register: lv_result
+      failed_when: false
+      changed_when: false
 
-        - name: create volume group
-          command: vgcreate actuated {{ actuated_disk }}
+    - name: create logical volume thinpool
+      ansible.builtin.shell: lvcreate -q --wipesignatures y -n thinpool actuated -l 95%FREE
+      when: "'thinpool' not in lv_result.stdout_lines"
 
-        - name: create logical volume thinpool
-          command: lvcreate -q --wipesignatures y -n thinpool actuated -l 95%VG
+    - name: create logical volume thinpoolmeta
+      ansible.builtin.shell: lvcreate -q --wipesignatures y -n thinpoolmeta actuated -l 1%FREE
+      when: "'thinpoolmeta' not in lv_result.stdout_lines"
 
-        - name: create logical volume thinpoolmeta
-          command: lvcreate -q --wipesignatures y -n thinpoolmeta actuated -l 1%VG
+    - name: Check if LV thinpool is already a thin pool
+      ansible.builtin.command: lvdisplay actuated/thinpool
+      register: lv_display_result
+      failed_when: false
+      changed_when: false
 
-        - name: convert logical volume to thinpool
-          command: lvconvert -y --zero n -c 512K --thinpool actuated/thinpool --poolmetadata actuated/thinpoolmeta
-      when: vg_check.failed
+    - name: convert logical volume to thinpool
+      ansible.builtin.shell: lvconvert -y --zero n -c 512K --thinpool actuated/thinpool --poolmetadata actuated/thinpoolmeta
+      when: "'LV Pool metadata' not in lv_display_result.stdout"
 
-    - name: setup LVM profile
-      block:
-        - name: create LVM profile
-          copy:
-            content: |
-              activation {
-              thin_pool_autoextend_threshold=80
-              thin_pool_autoextend_percent=20
-              }
-            dest: /etc/lvm/profile/actuated-thinpool.profile
-            owner: root
-            group: root
-            mode: 0644
+    - name: create LVM profile
+      copy:
+        content: |
+          activation {
+          thin_pool_autoextend_threshold=80
+          thin_pool_autoextend_percent=20
+          }
+        dest: /etc/lvm/profile/actuated-thinpool.profile
+        owner: root
+        group: root
+        mode: 0644
 
-        - name: apply metadata profile to LV
-          command: lvchange -q --metadataprofile "actuated-thinpool" actuated/thinpool
+    - name: Check LV metadata profile
+      ansible.builtin.command: lvdisplay --verbose actuated/thinpool
+      register: lv_display_result
+      failed_when: false
+      changed_when: false
 
-        - name: monitor the logical volume
-          command: lvchange --monitor y actuated/thinpool
-      when: vg_check.failed
+    - name: Apply metadata profile to LV
+      ansible.builtin.shell: lvchange -q --metadataprofile "actuated-thinpool" actuated/thinpool
+      when: "'LV Metadata profile' not in lv_display_result.stdout or 'actuated-thinpool' not in lv_display_result.stdout"
+
+    - name: Check LV monitoring status
+      ansible.builtin.command: lvdisplay --verbose actuated/thinpool
+      register: lv_monitor_result
+      failed_when: false
+      changed_when: false
+
+    - name: Monitor the logical volume
+      ansible.builtin.shell: lvchange --monitor y actuated/thinpool
+      when: "'LV Monitoring' not in lv_monitor_result.stdout or 'monitoring' not in lv_monitor_result.stdout"
 
     - name: Ensure directories exists
       ansible.builtin.file:
