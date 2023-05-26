@@ -1,0 +1,235 @@
+- name: Actuated Host Setup
+  hosts: amd,arm
+  vars_files:
+    - secret.yml
+  vars:
+    base_image_size: "100GB"
+    arkade_cli:
+      - crane
+    arkade_system:
+      - package: node
+        test: node
+      - package: containerd
+        test: containerd
+      - package: registry
+        test: registry
+    directories:
+      - name: "{{ ansible_env.HOME }}/.actuated"
+      - name: "/etc/actuated"
+      - name: /var/lib/registry
+      - name: /var/lib/registry/dockerhub
+      - name: /var/lib/registry/ghcr
+    services:
+      - name: devpool
+      - name: verdaccio
+      - name: registry-dockerhub
+      - name: registry-ghcr
+      - name: seaweedfs
+    registries:
+      - name: ghcr
+        url: https://ghcr.io
+        username: roderik
+        password: "{{ github_pat }}"
+        local_port: 5001
+      - name: dockerhub
+        url: https://registry-1.docker.io
+        username: roderik
+        password: "{{ dockerhub_pat }}"
+        local_port: 5000
+    files:
+      - src: files/devpool/devpool.service
+        dest: /etc/systemd/system/devpool.service
+      - src: files/verdaccio/verdaccio.service
+        dest: /etc/systemd/system/verdaccio.service
+      - src: files/seaweedfs/seaweedfs.service
+        dest: /etc/systemd/system/seaweedfs.service
+      - src: files/seaweedfs/s3.conf
+        dest: /etc/actuated/s3.conf
+    # base_image_size: 100GB
+    # disk_size: 600G
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: ["*"]
+        state: latest
+        update_cache: yes
+
+    - name: check if volume group exists
+      command: vgs actuated
+      register: vg_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: setup LVM partition
+      block:
+        - name: create physical volume
+          command: pvcreate -ff {{ actuated_disk }}
+
+        - name: create volume group
+          command: vgcreate actuated {{ actuated_disk }}
+
+        - name: create logical volume thinpool
+          command: lvcreate -q --wipesignatures y -n thinpool actuated -l 95%VG
+
+        - name: create logical volume thinpoolmeta
+          command: lvcreate -q --wipesignatures y -n thinpoolmeta actuated -l 1%VG
+
+        - name: convert logical volume to thinpool
+          command: lvconvert -y --zero n -c 512K --thinpool actuated/thinpool --poolmetadata actuated/thinpoolmeta
+      when: vg_check.failed
+
+    - name: setup LVM profile
+      block:
+        - name: create LVM profile
+          copy:
+            content: |
+              activation {
+              thin_pool_autoextend_threshold=80
+              thin_pool_autoextend_percent=20
+              }
+            dest: /etc/lvm/profile/actuated-thinpool.profile
+            owner: root
+            group: root
+            mode: 0644
+
+        - name: apply metadata profile to LV
+          command: lvchange -q --metadataprofile "actuated-thinpool" actuated/thinpool
+
+        - name: monitor the logical volume
+          command: lvchange --monitor y actuated/thinpool
+      when: vg_check.failed
+
+    - name: Ensure directories exists
+      ansible.builtin.file:
+        path: "{{ item.name }}"
+        state: directory
+      loop: "{{directories}}"
+
+    - name: Download and install arkade
+      ansible.builtin.shell: curl -sLS https://get.arkade.dev | sudo sh
+      args:
+        creates: /usr/local/bin/arkade
+
+    - name: Get system tools using arkade
+      ansible.builtin.shell: command -v {{ item.test }} >/dev/null || arkade system install {{ item.package }}
+      loop: "{{arkade_system}}"
+
+    - name: Get cli tools using arkade
+      ansible.builtin.shell: arkade get {{ item }}
+      args:
+        creates: "{{ ansible_env.HOME }}/.arkade/bin/{{ item }}"
+      loop: "{{arkade_cli}}"
+
+    - name: Copy binaries to /usr/local/bin/
+      ansible.builtin.shell: cp {{ ansible_env.HOME }}/.arkade/bin/{{ item }} /usr/local/bin/
+      args:
+        creates: /usr/local/bin/{{ item }}
+      loop: "{{arkade_cli}}"
+
+    - name: Write license key
+      ansible.builtin.copy:
+        content: "{{ license_key }}"
+        dest: "{{ ansible_env.HOME }}/.actuated/LICENSE"
+
+    - name: Create 'agent' directory if it does not exist
+      file:
+        path: "{{ ansible_env.HOME }}/agent"
+        state: directory
+        mode: '0755'
+
+    - name: Export and extract the image
+      ansible.builtin.shell: crane export ghcr.io/openfaasltd/actuated-agent:latest | tar -xvf - -C ./agent
+      args:
+        creates: "{{ ansible_env.HOME }}/agent/install.sh"
+
+    - name: Move 'agent' binary to '/usr/local/bin/'
+      ansible.builtin.shell: mv {{ ansible_env.HOME }}/agent/agent* /usr/local/bin/
+      args:
+        creates: /usr/local/bin/agent
+
+    - name: Change the devpool
+      ansible.builtin.lineinfile:
+        path: "{{ ansible_env.HOME }}/agent/config.toml"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - regexp: 'base_image_size = "\d+GB"'
+          line: '    base_image_size = "{{ base_image_size }}"'
+        - regexp: 'pool_name'
+          line: '    pool_name = "actuated-thinpool"'
+
+    - name: Execute 'install.sh' script
+      ansible.builtin.shell: ./install.sh && touch "{{ ansible_env.HOME }}/agent/.install_completed"
+      args:
+        chdir: "{{ ansible_env.HOME }}/agent"
+        creates: "{{ ansible_env.HOME }}/agent/.install_completed"
+
+    - name: Install package
+      ansible.builtin.npm:
+        name: verdaccio
+        global: yes
+
+    - name: Copy files to remote host
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ files }}"
+
+    - name: Copy registry systemd service files to remote host
+      ansible.builtin.template:
+        src: files/registry/registry.service.j2
+        dest: "/etc/systemd/system/registry-{{ item.name }}.service"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{registries}}"
+      vars:
+        registry_name: "{{ item.name }}"
+
+    - name: Copy registry config files to remote host
+      ansible.builtin.template:
+        src: files/registry/config.yml.j2
+        dest: "/etc/actuated/config.{{ item.name }}.yml"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{registries}}"
+      vars:
+        registry_name: "{{ item.name }}"
+        registry_url: "{{ item.url }}"
+        registry_username: "{{ item.username }}"
+        registry_password: "{{ item.password }}"
+        registry_local_port: "{{ item.local_port }}"
+
+    - name: Reload systemd to pick up new service
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Enable and start services
+      ansible.builtin.systemd:
+        name: "{{ item.name }}"
+        state: started
+        enabled: yes
+      loop: "{{ services }}"
+
+    - name: Determine agent command
+      ansible.builtin.set_fact:
+        agent_command: "{{ 'agent' if ansible_architecture == 'x86_64' else 'agent-arm64' }}"
+
+    - name: Enroll the server
+      ansible.builtin.shell: "{{agent_command}} enroll --url https://{{ ansible_host }}"
+      args:
+        creates: "{{ ansible_env.HOME }}/.actuated/agent.yaml"
+
+    - name: Store the enrollment file locally
+      ansible.builtin.fetch:
+        src: "{{ ansible_env.HOME }}/.actuated/agent.yaml"
+        dest: agent.yaml
+
+    - name: Launch the agent
+      ansible.builtin.shell: "{{agent_command}} install-service --letsencrypt-domain {{ ansible_host }} --letsencrypt-email webmaster@{{ ansible_host }}"
+      args:
+        creates: "/etc/systemd/system/actuated.service"

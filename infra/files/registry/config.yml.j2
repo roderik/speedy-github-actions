@@ -1,0 +1,20 @@
+version: 0.1
+log:
+  accesslog:
+    disabled: true
+  level: debug
+  formatter: text
+
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry/{{ registry_name }}
+
+proxy:
+  remoteurl: {{ registry_url }}
+  username: {{ registry_username }}
+  password: {{ registry_password }}
+
+http:
+  addr: 192.168.128.1:{{ registry_local_port }}
+  relativeurls: false
+  draintimeout: 60s

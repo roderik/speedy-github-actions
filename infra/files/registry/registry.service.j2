@@ -1,0 +1,12 @@
+[Unit]
+Description=Registry
+After=network.target actuated.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5s
+ExecStart=/usr/local/bin/registry serve /etc/actuated/config.{{ registry_name }}.yml
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=Setup Custom Actuated Devpool
+
+[Service]
+User=root
+Type=simple
+ExecStart=/root/agent/dmsetup.sh
+Restart=always
+RestartSec=10s
+
+Before=containerd.service actuated.service
+
+[Install]
+WantedBy=multi-user.target

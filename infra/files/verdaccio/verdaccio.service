@@ -1,0 +1,12 @@
+[Unit]
+Description=Verdaccio
+After=network.target actuated.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5s
+ExecStart=verdaccio --listen http:192.168.128.1:4873
+
+[Install]
+WantedBy=multi-user.target

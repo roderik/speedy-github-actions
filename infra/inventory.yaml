@@ -1,0 +1,13 @@
+amd:
+  hosts:
+    actuated-amd-01:
+      ansible_user: root
+      ansible_host: xx-amd-01.mydomain.net
+      actuated_disk: /dev/nvme1n1
+
+arm:
+  hosts:
+    actuated-arm-01:
+      ansible_user: root
+      ansible_host: xx-arm-01.mydomain.net
+      actuated_disk: /dev/nvme1n1
