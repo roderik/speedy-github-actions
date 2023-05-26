@@ -20,7 +20,6 @@
       - name: /var/lib/registry/dockerhub
       - name: /var/lib/registry/ghcr
     services:
-      - name: devpool
       - name: verdaccio
       - name: registry-dockerhub
       - name: registry-ghcr
@@ -37,16 +36,12 @@
         password: "{{ dockerhub_pat }}"
         local_port: 5000
     files:
-      - src: files/devpool/devpool.service
-        dest: /etc/systemd/system/devpool.service
       - src: files/verdaccio/verdaccio.service
         dest: /etc/systemd/system/verdaccio.service
       - src: files/seaweedfs/seaweedfs.service
         dest: /etc/systemd/system/seaweedfs.service
       - src: files/seaweedfs/s3.conf
         dest: /etc/actuated/s3.conf
-    # base_image_size: 100GB
-    # disk_size: 600G
   tasks:
     - name: Update all packages to their latest version
       ansible.builtin.apt:
