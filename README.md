@@ -86,6 +86,44 @@ ansible-playbook -i inventory.yaml -u root playbook.yaml --ask-vault-pass
 
 To make full use of all the caching options, you can use these actions:
 
+### Verdaccio NPM Cache
+
+Pipes all npm, yarn and pnpm installs through its proxy cache.
+
 ```
-TBD
+    - name: Setup NPM Cache
+      uses: roderik/speedy-github-actions/actions/setup-npm-cache@main
+```
+
+### Docker Cache
+
+Pipes all docker pulls through its proxy cache.
+
+```
+    - name: Setup Docker Cache
+      uses: roderik/speedy-github-actions/actions/setup-docker-cache@main
+
+    - name: Setup Docker Buildx Cache
+      uses: roderik/speedy-github-actions/actions/setup-docker-buildx-cache@main
+```
+
+### File Caching
+
+Very similar to `actions/cache`:
+
+```
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: bash
+      run: |
+        echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+    - name: Cache the PNPM store
+      uses: roderik/speedy-github-actions/setup-file-cache@main
+      with:
+        path: |
+          ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
 ```
