@@ -1,0 +1,12 @@
+
+name: 'Setup NPM Cache'
+description: 'Sets up NPM with caching'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup config
+      shell: bash
+      run: |
+        echo "NPM_CONFIG_REGISTRY=http://192.168.128.1:4873" >> $GITHUB_ENV
+

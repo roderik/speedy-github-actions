@@ -1,0 +1,25 @@
+
+name: 'Setup Docker Cache'
+description: 'Sets up Docker with caching'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup config
+      shell: bash
+      id: setup-config
+      env:
+        INSECURE_REG: "\"192.168.128.1:5000\", \"192.168.128.1:5001\""
+        REG_MIRRORS: "\"http://192.168.128.1:5000\", \"http://192.168.128.1:5001\""
+      run: |
+        sudo mkdir -p /etc/docker
+        cat <<EOF | sudo tee /etc/docker/daemon.json
+        {
+            "insecure-registries" : [${INSECURE_REG}],
+            "registry-mirrors": [${REG_MIRRORS}]
+        }
+        EOF
+        sudo cat /etc/docker/daemon.json
+        sudo systemctl daemon-reload
+        sudo systemctl restart docker
+

@@ -1,0 +1,31 @@
+
+name: 'Setup File Cache'
+description: 'Sets up File caching to the local S3'
+
+inputs:
+  path:
+    description: "A list of files, directories, and wildcard patterns to cache and restore"
+    required: true
+  key:
+    description: "An explicit key for restoring and saving the cache"
+    required: true
+  restore-keys:
+    description: "An ordered list of keys to use for restoring the cache if no cache hit occurred for key"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - uses: tespkg/actions-cache@v1
+      with:
+        endpoint: "192.168.128.1"
+        port: 8333
+        insecure: true
+        accessKey: "s3cr3t"
+        secretKey: "s3cr3t"
+        bucket: actuated
+        region: local
+        use-fallback: true
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+        restore-keys: ${{ inputs.restore-keys }}
