@@ -24,3 +24,10 @@ runs:
           [registry."192.168.128.1:5001"]
             http = true
             insecure = true
+
+    - name: Set the NPM registry if it is set
+      shell: bash
+      run: |
+        if [[ -n "${NPM_CONFIG_REGISTRY}" ]]; then
+          pnpm config set registry $NPM_CONFIG_REGISTRY
+        fi

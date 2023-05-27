@@ -23,3 +23,9 @@ runs:
         sudo systemctl daemon-reload
         sudo systemctl restart docker
 
+    - name: Set the NPM registry if it is set
+      shell: bash
+      run: |
+        if [[ -n "${NPM_CONFIG_REGISTRY}" ]]; then
+          pnpm config set registry $NPM_CONFIG_REGISTRY
+        fi
