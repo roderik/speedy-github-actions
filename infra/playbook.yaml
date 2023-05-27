@@ -18,6 +18,7 @@
       - name: /var/lib/registry
       - name: /var/lib/registry/dockerhub
       - name: /var/lib/registry/ghcr
+      - name: /var/lib/runner-cache
     services:
       - name: verdaccio
       - name: registry-dockerhub

@@ -4,7 +4,7 @@ After=network.target actuated.service
 
 [Service]
 User=root
-ExecStart=/usr/local/bin/seaweedfs server -ip=192.168.128.1 -volume.max=0 -volume.fileSizeLimitMB=2048 -dir=/home/runner-cache -s3 -s3.config=/etc/seaweedfs/s3.conf
+ExecStart=/usr/local/bin/seaweedfs server -ip=192.168.128.1 -volume.max=0 -volume.fileSizeLimitMB=2048 -dir=/var/lib/runner-cache -s3 -s3.config=/etc/seaweedfs/s3.conf
 Restart=on-failure
 
 [Install]
