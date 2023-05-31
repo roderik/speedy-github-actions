@@ -220,3 +220,25 @@
       ansible.builtin.shell: "{{agent_command}} install-service --letsencrypt-domain {{ ansible_host }} --letsencrypt-email webmaster@{{ ansible_host }}"
       args:
         creates: "/etc/systemd/system/actuated.service"
+
+    - name: Set Google DNS in resolved.conf
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/resolved.conf
+        regexp: '^DNS='
+        line: 'DNS=8.8.8.8 8.8.4.4'
+
+    - name: Set Cloudflare DNS in resolved.conf
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/resolved.conf
+        regexp: '^FallbackDNS='
+        line: 'FallbackDNS=1.1.1.1'
+
+    - name: Change the main dns resolver
+      ansible.builtin.shell:
+        cmd: |
+          for interface in $(ip link show | awk -F': ' '{print $2}' | grep -v lo | grep enp); do   sudo resolvectl dns $interface 8.8.8.8 8.8.4.4; done
+
+    - name: Reload service resolved, in all cases
+      ansible.builtin.systemd:
+        name: systemd-resolved.service
+        state: restarted
